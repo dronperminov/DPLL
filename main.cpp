@@ -41,6 +41,13 @@ int main(int argc, char **argv) {
         cout << "Readed cnf:" << endl;
         cnf.Print();
         cnf.PrintTermValues();
+
+        if (cnf.DPLL()) {
+            cout << "SAT" << endl;
+        }
+        else {
+            cout << "UNSAT" << endl;
+        }
     }
     catch (const string& error) {
         cout << "Error: " << error << endl;

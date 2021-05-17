@@ -14,6 +14,11 @@ enum class TermValue {
     False
 };
 
+struct Assignment {
+    int literal;
+    TermValue value;
+};
+
 class ConjunctiveNormalForm {
     bool debug; // нужна ли отладка
     int variablesCount; // количество переменных
@@ -24,11 +29,24 @@ class ConjunctiveNormalForm {
     void SetVariablesCount(int variablesCount); // обновление количества переменных
     void SetClausesCount(int clausesCount); // обновление количества клауз
     void AddClause(const std::string& line); // добавление клаузы
+
+    TermValue GetLiteralValue(int literal) const; // получение значения литерала
+    bool IsUnitClause(size_t index) const; // является ли клауза единичной
+    bool IsRemovedClause(size_t index) const; // удалена ли клауза (есть ли единичные литералы)
+    bool IsEmptyClause(size_t index) const; // пустая ли клауза
+
+    int GetUnitLiteral(size_t index) const; // получение литерала из единичной клаузы
+    void UnitPropagation(); // распространение констант
+
+    bool IsSolve() const; // все ли клаузы удалены
+    bool IsConflict() const; // есть ли пустые клаузы
 public:
     ConjunctiveNormalForm(std::istream &fin, bool debug);
 
     void Print() const; // вывод СКНФ
     void PrintTermValues() const; // вывод значений термов
+
+    bool DPLL(); // алгоритм DPLL
 };
 
 ConjunctiveNormalForm::ConjunctiveNormalForm(std::istream &fin, bool debug) {
@@ -152,4 +170,105 @@ void ConjunctiveNormalForm::PrintTermValues() const {
     }
 
     std::cout << "+------------+-----------+" << std::endl;
+}
+
+// получение значения литерала
+TermValue ConjunctiveNormalForm::GetLiteralValue(int literal) const {
+    size_t index = abs(literal) - 1;
+
+    if (literal > 0 || values[index] == TermValue::Undefined)
+        return values[index];
+
+    return values[index] == TermValue::True ? TermValue::False : TermValue::True;
+}
+
+// является ли клауза единичной
+bool ConjunctiveNormalForm::IsUnitClause(size_t index) const {
+    int undefinedCount = 0; // количество неопределённых значений
+
+    for (auto it = clauses[index].begin(); it != clauses[index].end() && undefinedCount < 2; it++)
+        if (GetLiteralValue(*it) == TermValue::Undefined)
+            undefinedCount++;
+
+    return undefinedCount == 1; // ровно один неопределённый литерал
+}
+
+// удалена ли клауза (есть ли единичные литералы)
+bool ConjunctiveNormalForm::IsRemovedClause(size_t index) const {
+    for (auto it = clauses[index].begin(); it != clauses[index].end(); it++)
+        if (GetLiteralValue(*it) == TermValue::True)
+            return true;
+
+    return false;
+}
+
+// пустая ли клауза
+bool ConjunctiveNormalForm::IsEmptyClause(size_t index) const {
+    for (auto it = clauses[index].begin(); it != clauses[index].end(); it++)
+        if (GetLiteralValue(*it) != TermValue::False)
+            return false;
+
+    return true; // пуста, если все значения ложны
+}
+
+// получение литерала из единичной клаузы
+int ConjunctiveNormalForm::GetUnitLiteral(size_t index) const {
+    for (auto it = clauses[index].begin(); it != clauses[index].end(); it++)
+        if (GetLiteralValue(*it) == TermValue::Undefined)
+            return *it;
+
+    throw std::string("GetUnitLiteral: clause is not unit");
+}
+
+// распространение констант
+void ConjunctiveNormalForm::UnitPropagation() {
+    for (size_t i = 0; i < clauses.size(); i++) {
+        if (!IsUnitClause(i) || IsRemovedClause(i))
+            continue;
+
+        int literal = GetUnitLiteral(i);
+        values[abs(literal) - 1] = literal > 0 ? TermValue::True : TermValue::False;
+    }
+}
+
+// все ли клаузы удалены
+bool ConjunctiveNormalForm::IsSolve() const {
+    for (size_t i = 0; i < clauses.size(); i++)
+        if (!IsRemovedClause(i))
+            return false;
+
+    return true; // все клаузы удалены, решение
+}
+
+// есть ли пустые клаузы
+bool ConjunctiveNormalForm::IsConflict() const {
+    for (size_t i = 0; i < clauses.size(); i++)
+        if (IsEmptyClause(i))
+            return true; // конфликт
+
+    return false; // пустых клауз нет
+}
+
+// алгоритм DPLL
+bool ConjunctiveNormalForm::DPLL() {
+    UnitPropagation();
+
+    if (IsConflict())
+        return false;
+
+    if (IsSolve())
+        return true;
+
+    size_t index = 0;
+
+    while (index < variablesCount && GetLiteralValue(index + 1) != TermValue::Undefined)
+        index++;
+
+    ConjunctiveNormalForm cnfTrue(*this);
+    ConjunctiveNormalForm cnfFalse(*this);
+
+    cnfTrue.values[index] = TermValue::True;
+    cnfFalse.values[index] = TermValue::False;
+
+    return cnfTrue.DPLL() || cnfFalse.DPLL();
 }
