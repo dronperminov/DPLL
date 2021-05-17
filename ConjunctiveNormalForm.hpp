@@ -21,12 +21,12 @@ struct Assignment {
 
 class ConjunctiveNormalForm {
     bool debug; // нужна ли отладка
-    int variablesCount; // количество переменных
+    int literalsCount; // количество литералов
     int clausesCount; // количество клауз
     std::vector<std::set<int>> clauses; // клаузы
     std::vector<TermValue> values; // значения термов
 
-    void SetVariablesCount(int variablesCount); // обновление количества переменных
+    void SetLiteralsCount(int literalsCount); // обновление количества литералов
     void SetClausesCount(int clausesCount); // обновление количества клауз
     void AddClause(const std::string& line); // добавление клаузы
 
@@ -36,10 +36,12 @@ class ConjunctiveNormalForm {
     bool IsEmptyClause(size_t index) const; // пустая ли клауза
 
     int GetUnitLiteral(size_t index) const; // получение литерала из единичной клаузы
-    void UnitPropagation(); // распространение констант
+    void UnitPropagation(std::stack<int> &assignments); // распространение констант
 
     bool IsSolve() const; // все ли клаузы удалены
     bool IsConflict() const; // есть ли пустые клаузы
+
+    void RollBack(std::stack<int> &assignments, std::stack<Assignment> &decisions); // откат
 public:
     ConjunctiveNormalForm(std::istream &fin, bool debug);
 
@@ -51,7 +53,7 @@ public:
 
 ConjunctiveNormalForm::ConjunctiveNormalForm(std::istream &fin, bool debug) {
     this->debug = debug;
-    this->variablesCount = 0;
+    this->literalsCount = 0;
     this->clausesCount = 0;
 
     std::string line;
@@ -63,8 +65,8 @@ ConjunctiveNormalForm::ConjunctiveNormalForm(std::istream &fin, bool debug) {
         if (line[0] == 'p') {
             std::string tmp;
             std::stringstream ss(line);
-            ss >> tmp >> tmp >> variablesCount >> clausesCount;
-            SetVariablesCount(variablesCount);
+            ss >> tmp >> tmp >> literalsCount >> clausesCount;
+            SetLiteralsCount(literalsCount);
             SetClausesCount(clausesCount);
             continue;
         }
@@ -75,15 +77,15 @@ ConjunctiveNormalForm::ConjunctiveNormalForm(std::istream &fin, bool debug) {
     if (clauses.size() != clausesCount)
         throw std::string("Invalid file: different clauses count");
 
-    values = std::vector<TermValue>(variablesCount, TermValue::Undefined); // значения переменных не определены
+    values = std::vector<TermValue>(literalsCount, TermValue::Undefined); // значения литералов не определены
 }
 
-// обновление количества переменных
-void ConjunctiveNormalForm::SetVariablesCount(int variablesCount) {
-    if (variablesCount <= 0)
-        throw std::string("ConjunctiveNormalForm::SetVariablesCount: variables count must be positive");
+// обновление количества литералов
+void ConjunctiveNormalForm::SetLiteralsCount(int literalsCount) {
+    if (literalsCount <= 0)
+        throw std::string("ConjunctiveNormalForm::SetLiteralsCount: variables count must be positive");
 
-    this->variablesCount = variablesCount;
+    this->literalsCount = literalsCount;
 }
 
 // обновление количества клауз
@@ -102,7 +104,7 @@ void ConjunctiveNormalForm::AddClause(const std::string& line) {
     int literal;
 
     while (ss >> literal && literal != 0) {
-        if (literal == 0 || abs(literal) > variablesCount)
+        if (literal == 0 || abs(literal) > literalsCount)
             throw std::string("Invalid literal index at line '") + line + "'";
 
         clause.insert(literal); // считываем клаузы
@@ -113,7 +115,7 @@ void ConjunctiveNormalForm::AddClause(const std::string& line) {
 
 // вывод СКНФ
 void ConjunctiveNormalForm::Print() const {
-    std::cout << "Variables count: " << variablesCount << std::endl;
+    std::cout << "Literals count: " << literalsCount << std::endl;
     std::cout << "Clauses count: " << clausesCount << std::endl;
     std::cout << "Clauses:" << std::endl;
 
@@ -221,13 +223,23 @@ int ConjunctiveNormalForm::GetUnitLiteral(size_t index) const {
 }
 
 // распространение констант
-void ConjunctiveNormalForm::UnitPropagation() {
-    for (size_t i = 0; i < clauses.size(); i++) {
-        if (!IsUnitClause(i) || IsRemovedClause(i))
-            continue;
+void ConjunctiveNormalForm::UnitPropagation(std::stack<int> &assignments) {
+    bool findUnitClause = true;
 
-        int literal = GetUnitLiteral(i);
-        values[abs(literal) - 1] = literal > 0 ? TermValue::True : TermValue::False;
+    while (findUnitClause) {
+        findUnitClause = false;
+
+        for (size_t i = 0; i < clauses.size(); i++) {
+            if (IsRemovedClause(i) || !IsUnitClause(i))
+                continue;
+
+            int literal = GetUnitLiteral(i);
+            TermValue value = literal > 0 ? TermValue::True : TermValue::False;
+
+            values[abs(literal) - 1] = value;
+            assignments.push(literal);
+            findUnitClause = true;
+        }
     }
 }
 
@@ -249,26 +261,58 @@ bool ConjunctiveNormalForm::IsConflict() const {
     return false; // пустых клауз нет
 }
 
+// откат
+void ConjunctiveNormalForm::RollBack(std::stack<int> &assignments, std::stack<Assignment> &decisions) {
+    // удаляем все присваивания, выполненные на последнем разделении
+    while (assignments.top() != decisions.top().literal) {
+        values[abs(assignments.top()) - 1] = TermValue::Undefined;
+        assignments.pop();
+    }
+
+    Assignment &decision = decisions.top();
+
+    if (decision.value == TermValue::False) { // сли это была ложная ветвь
+        decision.value = TermValue::True; // заменяем на истинную ветвь
+        values[abs(decision.literal) - 1] = TermValue::True;
+    }
+    else { // иначе попробовали оба варианта
+        assignments.pop(); // извлекаем присваивание
+        decisions.pop(); // извлекаем выбор
+        values[abs(decision.literal) - 1] = TermValue::Undefined;
+
+        if (decisions.size()) {
+            RollBack(assignments, decisions);
+        }
+    }
+}
+
 // алгоритм DPLL
 bool ConjunctiveNormalForm::DPLL() {
-    UnitPropagation();
+    std::stack<int> assignments;
+    std::stack<Assignment> decisions;
 
-    if (IsConflict())
-        return false;
+    while (true) {
+        UnitPropagation(assignments);
 
-    if (IsSolve())
-        return true;
+        if (IsConflict()) {
+            RollBack(assignments, decisions);
 
-    size_t index = 0;
+            if (decisions.size() == 0) // если выбора больше нет
+                return false; // то невыполнима
 
-    while (index < variablesCount && GetLiteralValue(index + 1) != TermValue::Undefined)
-        index++;
+            continue;
+        }
 
-    ConjunctiveNormalForm cnfTrue(*this);
-    ConjunctiveNormalForm cnfFalse(*this);
+        if (IsSolve())
+            return true;
 
-    cnfTrue.values[index] = TermValue::True;
-    cnfFalse.values[index] = TermValue::False;
+        int index = 0;
 
-    return cnfTrue.DPLL() || cnfFalse.DPLL();
+        while (index < literalsCount && GetLiteralValue(index + 1) != TermValue::Undefined)
+            index++;
+
+        decisions.push({ index + 1, TermValue::False });
+        assignments.push(index + 1);
+        values[index] = TermValue::False;
+    }
 }
