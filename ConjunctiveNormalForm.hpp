@@ -3,7 +3,6 @@
 #include <iostream>
 #include <iomanip>
 #include <vector>
-#include <set>
 #include <stack>
 #include <string>
 
@@ -23,7 +22,7 @@ class ConjunctiveNormalForm {
     bool debug; // нужна ли отладка
     int literalsCount; // количество литералов
     int clausesCount; // количество клауз
-    std::vector<std::set<int>> clauses; // клаузы
+    std::vector<std::vector<int>> clauses; // клаузы
     std::vector<TermValue> values; // значения термов
 
     void SetLiteralsCount(int literalsCount); // обновление количества литералов
@@ -42,6 +41,7 @@ class ConjunctiveNormalForm {
     bool IsConflict() const; // есть ли пустые клаузы
 
     void RollBack(std::stack<int> &assignments, std::stack<Assignment> &decisions); // откат
+    void Decision(std::stack<int> &assignments, std::stack<Assignment> &decisions); // разветвление
 public:
     ConjunctiveNormalForm(std::istream &fin, bool debug);
 
@@ -100,14 +100,14 @@ void ConjunctiveNormalForm::SetClausesCount(int clausesCount) {
 // добавление клаузы
 void ConjunctiveNormalForm::AddClause(const std::string& line) {
     std::stringstream ss(line);
-    std::set<int> clause;
+    std::vector<int> clause;
     int literal;
 
     while (ss >> literal && literal != 0) {
         if (literal == 0 || abs(literal) > literalsCount)
             throw std::string("Invalid literal index at line '") + line + "'";
 
-        clause.insert(literal); // считываем клаузы
+        clause.push_back(literal); // считываем клаузы
     }
 
     clauses.push_back(clause); // добавляем клаузы
@@ -278,12 +278,24 @@ void ConjunctiveNormalForm::RollBack(std::stack<int> &assignments, std::stack<As
     else { // иначе попробовали оба варианта
         assignments.pop(); // извлекаем присваивание
         decisions.pop(); // извлекаем выбор
-        values[abs(decision.literal) - 1] = TermValue::Undefined;
+        values[abs(decision.literal) - 1] = TermValue::Undefined; // сбрасываем переменную
 
         if (decisions.size()) {
             RollBack(assignments, decisions);
         }
     }
+}
+
+// разветвление
+void ConjunctiveNormalForm::Decision(std::stack<int> &assignments, std::stack<Assignment> &decisions) {
+    int index = 0;
+
+    while (index < literalsCount && GetLiteralValue(index + 1) != TermValue::Undefined)
+        index++;
+
+    decisions.push({ index + 1, TermValue::False });
+    assignments.push(index + 1);
+    values[index] = TermValue::False;
 }
 
 // алгоритм DPLL
@@ -292,27 +304,20 @@ bool ConjunctiveNormalForm::DPLL() {
     std::stack<Assignment> decisions;
 
     while (true) {
-        UnitPropagation(assignments);
+        UnitPropagation(assignments); // распространяем единичные литералы
 
-        if (IsConflict()) {
-            RollBack(assignments, decisions);
+        if (IsConflict()) { // если конфликт
+            RollBack(assignments, decisions); // откатываемся
 
             if (decisions.size() == 0) // если выбора больше нет
                 return false; // то невыполнима
 
-            continue;
+            continue; // пытаемся посмотреть дальше
         }
 
-        if (IsSolve())
-            return true;
+        if (IsSolve()) // если решение
+            return true; // то выполнима
 
-        int index = 0;
-
-        while (index < literalsCount && GetLiteralValue(index + 1) != TermValue::Undefined)
-            index++;
-
-        decisions.push({ index + 1, TermValue::False });
-        assignments.push(index + 1);
-        values[index] = TermValue::False;
+        Decision(assignments, decisions); // разветвляемся
     }
 }
