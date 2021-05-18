@@ -447,9 +447,9 @@ void ConjunctiveNormalForm::RollBack(std::stack<int> &assignments, std::stack<As
 
     Assignment &decision = decisions.top();
 
-    if (decision.value == TermValue::False) { // сли это была ложная ветвь
-        decision.value = TermValue::True; // заменяем на истинную ветвь
-        values[abs(decision.literal) - 1] = TermValue::True;
+    if (decision.value == TermValue::True) { // сли это была истинная ветвь
+        decision.value = TermValue::False; // заменяем на ложную ветвь
+        values[abs(decision.literal) - 1] = TermValue::False;
     }
     else { // иначе попробовали оба варианта
         assignments.pop(); // извлекаем присваивание
@@ -465,9 +465,9 @@ void ConjunctiveNormalForm::RollBack(std::stack<int> &assignments, std::stack<As
 // разветвление
 void ConjunctiveNormalForm::Decision(std::stack<int> &assignments, std::stack<Assignment> &decisions, DecisionStrategy strategy) {
     int literal = GetDecisionLiteral(strategy);
-    decisions.push({ literal, TermValue::False });
+    decisions.push({ literal, TermValue::True });
     assignments.push(literal);
-    values[literal - 1] = TermValue::False;
+    values[literal - 1] = TermValue::True;
 }
 
 // алгоритм DPLL
