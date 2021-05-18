@@ -11,6 +11,25 @@ void Help() {
     cout << "Usage: ./dpll [path/to/cnf/file] [-d or --debug]" << endl;
 }
 
+DecisionStrategy GetStrategy(const string& strategy) {
+    if (strategy == "first")
+        return DecisionStrategy::First;
+
+    if (strategy == "random")
+        return DecisionStrategy::Random;
+
+    if (strategy == "max")
+        return DecisionStrategy::Max;
+
+    if (strategy == "moms")
+        return DecisionStrategy::Moms;
+
+    if (strategy == "weighted")
+        return DecisionStrategy::Weighted;
+
+    throw string("Invalid strategy name '") + strategy + "'";
+}
+
 int main(int argc, char **argv) {
     if (argc == 2 && string(argv[1]) == "--help") {
         Help();
@@ -21,11 +40,6 @@ int main(int argc, char **argv) {
         cout << "Error: invalid arguments count" << endl;
         return -1;
     }
-
-    if (argc == 3 && string(argv[2]) != "--debug" && string(argv[2]) != "-d") {
-        cout << "Error: invalid debug flag" << endl;
-        return -1;
-    }
     
     ifstream fin(argv[1]);
 
@@ -34,15 +48,21 @@ int main(int argc, char **argv) {
         return -1;
     }
 
+    DecisionStrategy strategy = DecisionStrategy::First;
+
     try {
-        ConjunctiveNormalForm cnf(fin, argc == 3);
+        if (argc == 3) {
+            strategy = GetStrategy(argv[2]);
+        }
+
+        ConjunctiveNormalForm cnf(fin);
         fin.close();
 
         cout << "Readed cnf:" << endl;
         cnf.Print();
         cnf.PrintTermValues();
 
-        if (cnf.DPLL()) {
+        if (cnf.DPLL(strategy)) {
             cout << "SAT" << endl;
         }
         else {

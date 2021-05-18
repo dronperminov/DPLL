@@ -5,6 +5,7 @@
 #include <vector>
 #include <stack>
 #include <string>
+#include <unordered_map>
 
 // значения термов
 enum class TermValue {
@@ -13,13 +14,21 @@ enum class TermValue {
     False
 };
 
+// стратегия выбора литерала
+enum class DecisionStrategy {
+    First, // первый неопределённый
+    Random, // случайный
+    Max, // максимальное число вхождений в клаузы
+    Moms, // вхождения в минимальные клаузы
+    Weighted // взвешенная сумму
+};
+
 struct Assignment {
     int literal;
     TermValue value;
 };
 
 class ConjunctiveNormalForm {
-    bool debug; // нужна ли отладка
     int literalsCount; // количество литералов
     int clausesCount; // количество клауз
     std::vector<std::vector<int>> clauses; // клаузы
@@ -40,19 +49,25 @@ class ConjunctiveNormalForm {
     bool IsSolve() const; // все ли клаузы удалены
     bool IsConflict() const; // есть ли пустые клаузы
 
+    int GetFirstUndefinedLiteral() const; // первый неопределённый литерал
+    int GetRandomUndefinedLiteral() const; // случайный неопределённый литерал
+    int GetMaxOccurencesLiteral() const; // литерал с наибольшим числом вхождений
+    int GetMomsOccurencesLiteral() const; // литерал с наибольшим числом вхождений в кратчайшие клаузы
+    int GetWeightedLiteral() const; // литерал по взвешенной сумме
+    int GetDecisionLiteral(DecisionStrategy strategy); // выбор литерала для разветвления
+
     void RollBack(std::stack<int> &assignments, std::stack<Assignment> &decisions); // откат
-    void Decision(std::stack<int> &assignments, std::stack<Assignment> &decisions); // разветвление
+    void Decision(std::stack<int> &assignments, std::stack<Assignment> &decisions, DecisionStrategy strategy); // разветвление
 public:
-    ConjunctiveNormalForm(std::istream &fin, bool debug);
+    ConjunctiveNormalForm(std::istream &fin);
 
     void Print() const; // вывод СКНФ
     void PrintTermValues() const; // вывод значений термов
 
-    bool DPLL(); // алгоритм DPLL
+    bool DPLL(DecisionStrategy strategy); // алгоритм DPLL
 };
 
-ConjunctiveNormalForm::ConjunctiveNormalForm(std::istream &fin, bool debug) {
-    this->debug = debug;
+ConjunctiveNormalForm::ConjunctiveNormalForm(std::istream &fin) {
     this->literalsCount = 0;
     this->clausesCount = 0;
 
@@ -261,6 +276,142 @@ bool ConjunctiveNormalForm::IsConflict() const {
     return false; // пустых клауз нет
 }
 
+// первый неопределённый литерал
+int ConjunctiveNormalForm::GetFirstUndefinedLiteral() const {
+    for (int i = 0; i < literalsCount; i++)
+        if (values[i] == TermValue::Undefined)
+            return i + 1;
+
+    return 0; // нет неопределённых литералов
+}
+
+// случайный неопределённый литерал
+int ConjunctiveNormalForm::GetRandomUndefinedLiteral() const {
+    std::vector<int> undefinedLiterals;
+
+    for (int i = 0; i < literalsCount; i++)
+        if (values[i] == TermValue::Undefined)
+            undefinedLiterals.push_back(i + 1);
+
+    return undefinedLiterals[rand() % undefinedLiterals.size()];
+}
+
+// литерал с наибольшим числом вхождений
+int ConjunctiveNormalForm::GetMaxOccurencesLiteral() const {
+    std::unordered_map<int, int> counts;
+
+    for (size_t i = 0; i < clauses.size(); i++) {
+        if (IsRemovedClause(i))
+            continue;
+
+        for (size_t j = 0; j < clauses[i].size(); j++) {
+            int literal = abs(clauses[i][j]);
+            auto it = counts.find(literal);
+
+            if (it == counts.end()) {
+                counts[literal] = 1;
+            }
+            else {
+                counts[literal] += 1;
+            }
+        }
+    }
+
+    int literal = 0;
+
+    for (auto it = counts.begin(); it != counts.end(); it++) {
+        if (GetLiteralValue(it->first) != TermValue::Undefined)
+            continue;
+
+        if (literal == 0 || it->second > counts[literal])
+            literal = it->first;
+    }
+
+    return literal;
+}
+
+// литерал с наибольшим числом вхождений в кратчайшие клаузы
+int ConjunctiveNormalForm::GetMomsOccurencesLiteral() const {
+    int minLength = literalsCount;
+
+    for (size_t i = 0; i < clauses.size(); i++)
+        if (!IsRemovedClause(i) && clauses[i].size() < minLength)
+            minLength = clauses[i].size();
+
+    std::unordered_map<int, int> counts;
+
+    for (int i = 0; i < literalsCount; i++)
+        counts[i + 1] = 0;
+
+    for (size_t i = 0; i < clauses.size(); i++) {
+        if (IsRemovedClause(i) || clauses[i].size() != minLength)
+            continue;
+
+        for (size_t j = 0; j < clauses[i].size(); j++)
+            counts[abs(clauses[i][j])] += 1;
+    }
+
+    int literal = 0;
+
+    for (auto it = counts.begin(); it != counts.end(); it++) {
+        if (GetLiteralValue(it->first) != TermValue::Undefined)
+            continue;
+
+        if (literal == 0 || it->second > counts[literal])
+            literal = it->first;
+    }
+
+    return literal;
+}
+
+// литерал по взвешенной сумме
+int ConjunctiveNormalForm::GetWeightedLiteral() const {
+    std::unordered_map<int, double> weights;
+
+    for (int i = 0; i < literalsCount; i++)
+        weights[i + 1] = 0;
+
+    for (size_t i = 0; i < clauses.size(); i++) {
+        if (IsRemovedClause(i))
+            continue;
+
+        for (size_t j = 0; j < clauses[i].size(); j++)
+            weights[abs(clauses[i][j])] += 1.0 / (1 << clauses[i].size());
+    }
+
+    int literal = 0;
+
+    for (auto it = weights.begin(); it != weights.end(); it++) {
+        if (GetLiteralValue(it->first) != TermValue::Undefined)
+            continue;
+
+        if (literal == 0 || it->second > weights[literal])
+            literal = it->first;
+    }
+
+    return literal;
+}
+
+// выбор литерала для разветвления
+int ConjunctiveNormalForm::GetDecisionLiteral(DecisionStrategy strategy) {
+    if (strategy == DecisionStrategy::First)
+        return GetFirstUndefinedLiteral();
+
+    if (strategy == DecisionStrategy::Random)
+        return GetRandomUndefinedLiteral();
+
+    if (strategy == DecisionStrategy::Max)
+        return GetMaxOccurencesLiteral();
+
+    if (strategy == DecisionStrategy::Moms)
+        return GetMomsOccurencesLiteral();
+
+    if (strategy == DecisionStrategy::Weighted)
+        return GetWeightedLiteral();
+
+    return GetFirstUndefinedLiteral();
+}
+
 // откат
 void ConjunctiveNormalForm::RollBack(std::stack<int> &assignments, std::stack<Assignment> &decisions) {
     // удаляем все присваивания, выполненные на последнем разделении
@@ -287,19 +438,15 @@ void ConjunctiveNormalForm::RollBack(std::stack<int> &assignments, std::stack<As
 }
 
 // разветвление
-void ConjunctiveNormalForm::Decision(std::stack<int> &assignments, std::stack<Assignment> &decisions) {
-    int index = 0;
-
-    while (index < literalsCount && GetLiteralValue(index + 1) != TermValue::Undefined)
-        index++;
-
-    decisions.push({ index + 1, TermValue::False });
-    assignments.push(index + 1);
-    values[index] = TermValue::False;
+void ConjunctiveNormalForm::Decision(std::stack<int> &assignments, std::stack<Assignment> &decisions, DecisionStrategy strategy) {
+    int literal = GetDecisionLiteral(strategy);
+    decisions.push({ literal, TermValue::False });
+    assignments.push(literal);
+    values[literal - 1] = TermValue::False;
 }
 
 // алгоритм DPLL
-bool ConjunctiveNormalForm::DPLL() {
+bool ConjunctiveNormalForm::DPLL(DecisionStrategy strategy) {
     std::stack<int> assignments;
     std::stack<Assignment> decisions;
 
@@ -318,6 +465,6 @@ bool ConjunctiveNormalForm::DPLL() {
         if (IsSolve()) // если решение
             return true; // то выполнима
 
-        Decision(assignments, decisions); // разветвляемся
+        Decision(assignments, decisions, strategy); // разветвляемся
     }
 }
