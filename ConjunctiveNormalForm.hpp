@@ -307,32 +307,26 @@ int ConjunctiveNormalForm::GetRandomUndefinedLiteral() const {
 int ConjunctiveNormalForm::GetMaxOccurencesLiteral() const {
     std::unordered_map<int, int> counts;
 
+    for (int i = 0; i < literalsCount; i++)
+        counts[i + 1] = 0;
+
     for (size_t i = 0; i < clauses.size(); i++) {
         if (IsRemovedClause(i))
             continue;
 
         for (size_t j = 0; j < clauses[i].size(); j++) {
             int literal = abs(clauses[i][j]);
-            auto it = counts.find(literal);
 
-            if (it == counts.end()) {
-                counts[literal] = 1;
-            }
-            else {
-                counts[literal] += 1;
-            }
+            if (values[literal - 1] == TermValue::Undefined)
+                counts[literal]++;
         }
     }
 
     int literal = 0;
 
-    for (auto it = counts.begin(); it != counts.end(); it++) {
-        if (GetLiteralValue(it->first) != TermValue::Undefined)
-            continue;
-
+    for (auto it = counts.begin(); it != counts.end(); it++)
         if (literal == 0 || it->second > counts[literal])
             literal = it->first;
-    }
 
     return literal;
 }
@@ -354,19 +348,19 @@ int ConjunctiveNormalForm::GetMomsOccurencesLiteral() const {
         if (IsRemovedClause(i) || clauses[i].size() != minLength)
             continue;
 
-        for (size_t j = 0; j < clauses[i].size(); j++)
-            counts[abs(clauses[i][j])] += 1;
+        for (size_t j = 0; j < clauses[i].size(); j++) {
+            int literal = abs(clauses[i][j]);
+
+            if (values[literal - 1] == TermValue::Undefined)
+                counts[literal]++;
+        }
     }
 
     int literal = 0;
 
-    for (auto it = counts.begin(); it != counts.end(); it++) {
-        if (GetLiteralValue(it->first) != TermValue::Undefined)
-            continue;
-
+    for (auto it = counts.begin(); it != counts.end(); it++)
         if (literal == 0 || it->second > counts[literal])
             literal = it->first;
-    }
 
     return literal;
 }
@@ -382,19 +376,19 @@ int ConjunctiveNormalForm::GetWeightedLiteral() const {
         if (IsRemovedClause(i))
             continue;
 
-        for (size_t j = 0; j < clauses[i].size(); j++)
-            weights[abs(clauses[i][j])] += 1.0 / (1 << clauses[i].size());
+        for (size_t j = 0; j < clauses[i].size(); j++) {
+            int literal = abs(clauses[i][j]);
+
+            if (values[literal - 1] == TermValue::Undefined)
+                weights[literal] += 1.0 / (1 << clauses[i].size());
+        }
     }
 
     int literal = 0;
 
-    for (auto it = weights.begin(); it != weights.end(); it++) {
-        if (GetLiteralValue(it->first) != TermValue::Undefined)
-            continue;
-
+    for (auto it = weights.begin(); it != weights.end(); it++)
         if (literal == 0 || it->second > weights[literal])
             literal = it->first;
-    }
 
     return literal;
 }
