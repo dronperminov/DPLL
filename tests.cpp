@@ -23,6 +23,9 @@ string StrategyToString(DecisionStrategy strategy) {
     if (strategy == DecisionStrategy::Weighted)
         return "weighted";
 
+    if (strategy == DecisionStrategy::Up)
+        return "up";
+
     return "";
 }
 
@@ -57,15 +60,16 @@ void TestFromDir(const string& dir, int count, bool isSat, DecisionStrategy stra
 }
 
 int main(int argc, char **argv) {
-    DecisionStrategy strategies[5] = {
+    DecisionStrategy strategies[] = {
         DecisionStrategy::Max,
         DecisionStrategy::Moms,
         DecisionStrategy::Weighted,
+        DecisionStrategy::Up,
         DecisionStrategy::First,
         DecisionStrategy::Random
     };
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
         DecisionStrategy strategy = strategies[i];
 
         cout << endl << StrategyToString(strategy) << ":" << endl;
@@ -80,7 +84,7 @@ int main(int argc, char **argv) {
 
     cout << endl;
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
         TestOneFile("data/hanoi/hanoi4.cnf", true, strategies[i]);
     }
 }

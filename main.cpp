@@ -8,7 +8,15 @@ using namespace std;
 void Help() {
     cout << "DPLL algorithm." << endl;
     cout << "Developed by Andrew Perminov" << endl;
-    cout << "Usage: ./dpll [path/to/cnf/file] [-d or --debug]" << endl;
+    cout << "Usage: ./dpll [path/to/cnf/file] [strategy]" << endl;
+    cout << endl;
+    cout << "Decision strategies:" << endl;
+    cout << "  first    - get first undefined literal" << endl;
+    cout << "  random   - get random undefined literal" << endl;
+    cout << "  max      - get literal with max occurencies in clauses" << endl;
+    cout << "  moms     - get literal with max occurencies in clauses with minimal size" << endl;
+    cout << "  weighted - get literal with max weighted sum (score of l = 2^-|clause with l|)" << endl;
+    cout << "  up       - get literal with max up value (up in unit propagation)" << endl;
 }
 
 DecisionStrategy GetStrategy(const string& strategy) {
@@ -26,6 +34,9 @@ DecisionStrategy GetStrategy(const string& strategy) {
 
     if (strategy == "weighted")
         return DecisionStrategy::Weighted;
+
+    if (strategy == "up")
+        return DecisionStrategy::Up;
 
     throw string("Invalid strategy name '") + strategy + "'";
 }

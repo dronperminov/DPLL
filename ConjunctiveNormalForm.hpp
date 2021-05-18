@@ -20,7 +20,8 @@ enum class DecisionStrategy {
     Random, // случайный
     Max, // максимальное число вхождений в клаузы
     Moms, // вхождения в минимальные клаузы
-    Weighted // взвешенная сумму
+    Weighted, // взвешенная сумму
+    Up // стратегия UP
 };
 
 struct Assignment {
@@ -33,6 +34,7 @@ class ConjunctiveNormalForm {
     int clausesCount; // количество клауз
     std::vector<std::vector<int>> clauses; // клаузы
     std::vector<TermValue> values; // значения термов
+    std::unordered_map<int, int> up;
 
     void SetLiteralsCount(int literalsCount); // обновление количества литералов
     void SetClausesCount(int clausesCount); // обновление количества клауз
@@ -54,6 +56,7 @@ class ConjunctiveNormalForm {
     int GetMaxOccurencesLiteral() const; // литерал с наибольшим числом вхождений
     int GetMomsOccurencesLiteral() const; // литерал с наибольшим числом вхождений в кратчайшие клаузы
     int GetWeightedLiteral() const; // литерал по взвешенной сумме
+    int GetUpLiteral(); // литерал по стратегии Up
     int GetDecisionLiteral(DecisionStrategy strategy); // выбор литерала для разветвления
 
     void RollBack(std::stack<int> &assignments, std::stack<Assignment> &decisions); // откат
@@ -93,6 +96,9 @@ ConjunctiveNormalForm::ConjunctiveNormalForm(std::istream &fin) {
         throw std::string("Invalid file: different clauses count");
 
     values = std::vector<TermValue>(literalsCount, TermValue::Undefined); // значения литералов не определены
+
+    for (int i = 0; i < literalsCount; i++)
+        up[i + 1] = 0;
 }
 
 // обновление количества литералов
@@ -250,6 +256,7 @@ void ConjunctiveNormalForm::UnitPropagation(std::stack<int> &assignments) {
 
             int literal = GetUnitLiteral(i);
             TermValue value = literal > 0 ? TermValue::True : TermValue::False;
+            up[abs(literal)]++;
 
             values[abs(literal) - 1] = value;
             assignments.push(literal);
@@ -392,6 +399,21 @@ int ConjunctiveNormalForm::GetWeightedLiteral() const {
     return literal;
 }
 
+// литерал по стратегии Up
+int ConjunctiveNormalForm::GetUpLiteral() {
+    int literal = 0;
+
+    for (auto it = up.begin(); it != up.end(); it++) {
+        if (GetLiteralValue(it->first) != TermValue::Undefined)
+            continue;
+
+        if (literal == 0 || it->second > up[literal])
+            literal = it->first;
+    }
+
+    return literal;
+}
+
 // выбор литерала для разветвления
 int ConjunctiveNormalForm::GetDecisionLiteral(DecisionStrategy strategy) {
     if (strategy == DecisionStrategy::First)
@@ -408,6 +430,9 @@ int ConjunctiveNormalForm::GetDecisionLiteral(DecisionStrategy strategy) {
 
     if (strategy == DecisionStrategy::Weighted)
         return GetWeightedLiteral();
+
+    if (strategy == DecisionStrategy::Up)
+        return GetUpLiteral();
 
     return GetFirstUndefinedLiteral();
 }
