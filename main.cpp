@@ -42,6 +42,11 @@ DecisionStrategy GetStrategy(const string& strategy) {
 }
 
 int main(int argc, char **argv) {
+    if (argc == 1) {
+        cout << "no arguments. Run ./dpll --help for usage" << endl;
+        return 0;
+    }
+
     if (argc == 2 && string(argv[1]) == "--help") {
         Help();
         return 0;
@@ -68,10 +73,6 @@ int main(int argc, char **argv) {
 
         ConjunctiveNormalForm cnf(fin);
         fin.close();
-
-        cout << "Readed cnf:" << endl;
-        cnf.Print();
-        cnf.PrintTermValues();
 
         if (cnf.DPLL(strategy)) {
             cout << "SAT" << endl;
