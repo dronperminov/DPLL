@@ -1,11 +1,23 @@
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <string>
 #include <cassert>
-#include <ctime>
+#include <vector>
+#include <chrono>
 #include "ConjunctiveNormalForm.hpp"
 
 using namespace std;
+
+typedef std::chrono::high_resolution_clock Time;
+typedef std::chrono::time_point<Time> TimePoint;
+typedef std::chrono::milliseconds ms;
+
+struct Task {
+    string dirname;
+    int count;
+    bool isSat;
+};
 
 string StrategyToString(DecisionStrategy strategy) {
     if (strategy == DecisionStrategy::First)
@@ -43,24 +55,43 @@ void TestOneFile(const string& path, bool isSat, DecisionStrategy strategy) {
     cout << "Time for test '" << path << "' (" + StrategyToString(strategy) + "): " << time << " sec" << endl;
 }
 
-void TestFromDir(const string& dir, int count, bool isSat, DecisionStrategy strategy) {
-    clock_t t0 = clock();
+double TestFromDir(Task task, DecisionStrategy strategy, int loops = 10) {
+    TimePoint t0 = Time::now();
 
-    for (int i = 1; i <= count; i++) {
-        ifstream fin(dir + to_string(i) + ".cnf");
-        ConjunctiveNormalForm cnf(fin);
-        fin.close();
-        assert(cnf.DPLL(strategy) == isSat);
+    for (int loop = 0; loop < loops; loop++) {
+        for (int i = 1; i <= task.count; i++) {
+            ifstream fin(task.dirname + to_string(i) + ".cnf");
+            ConjunctiveNormalForm cnf(fin);
+            fin.close();
+            assert(cnf.DPLL(strategy) == task.isSat);
+        }
     }
 
-    clock_t t1 = clock();
-    double time = double(t1 - t0) / CLOCKS_PER_SEC;
+    TimePoint t1 = Time::now();
+    ms ellapsed = std::chrono::duration_cast<ms>(t1 - t0);
 
-    cout << "Time for test '" << dir << "' (" + StrategyToString(strategy) + "): " << time << " sec (" << (time / count * 1000) << " ms per iteration)" << endl;
+    return (double)ellapsed.count() / task.count / loops;
+}
+
+void PrintHeader(const vector<DecisionStrategy> &strategies) {
+    cout << "## Performance of DPLL SAT solver" << endl;
+    cout << "|     cnf \\ strategy     |";
+
+    for (size_t i = 0; i < strategies.size(); i++)
+        cout << setw(8) << StrategyToString(strategies[i]) << " |";
+
+    cout << endl;
+
+    cout << "|           :-:          |";
+
+    for (size_t i = 0; i < strategies.size(); i++)
+        cout << "     :-: |";
+
+    cout << endl;
 }
 
 int main(int argc, char **argv) {
-    DecisionStrategy strategies[] = {
+    vector<DecisionStrategy> strategies = {
         DecisionStrategy::Max,
         DecisionStrategy::Moms,
         DecisionStrategy::Weighted,
@@ -69,22 +100,33 @@ int main(int argc, char **argv) {
         DecisionStrategy::Random
     };
 
-    for (int i = 0; i < 6; i++) {
-        DecisionStrategy strategy = strategies[i];
+    vector<Task> tasks = {
+        { "data/sat20/uf20-0", 1000, true },
 
-        cout << endl << StrategyToString(strategy) << ":" << endl;
-        TestFromDir("data/sat20/uf20-0", 1000, true, strategy);
-        TestFromDir("data/sat50/uf50-0", 100, true, strategy);
-        TestFromDir("data/sat75/uf75-0", 100, true, strategy);
-        TestFromDir("data/sat100/uf100-0", 100, true, strategy);
-        TestFromDir("data/unsat50/uuf50-0", 100, false, strategy);
-        TestFromDir("data/unsat75/uuf75-0", 100, false, strategy);
-        TestFromDir("data/unsat100/uuf100-0", 100, false, strategy);
+        { "data/sat50/uf50-0", 100, true },
+        { "data/unsat50/uuf50-0", 100, false },
+
+        { "data/sat75/uf75-0", 100, true },
+        { "data/unsat75/uuf75-0", 100, false },
+
+        { "data/sat100/uf100-0", 100, true },
+        { "data/unsat100/uuf100-0", 100, false },
+    };
+
+    PrintHeader(strategies);
+
+    for (size_t i = 0; i < tasks.size(); i++) {
+        cout << "| " << setw(22) << tasks[i].dirname << " |";
+
+        for (int j = 0; j < strategies.size(); j++)
+            cout << " " << setw(7) << setprecision(3) << TestFromDir(tasks[i], strategies[j]) << " |";
+
+        cout << endl;
     }
 
     cout << endl;
 
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < strategies.size(); i++) {
         TestOneFile("data/hanoi/hanoi4.cnf", true, strategies[i]);
     }
 }
