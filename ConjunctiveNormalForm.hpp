@@ -435,27 +435,26 @@ int ConjunctiveNormalForm::GetDecisionLiteral(DecisionStrategy strategy) {
 
 // откат
 void ConjunctiveNormalForm::RollBack(std::stack<int> &assignments, std::stack<Assignment> &decisions) {
-    // удаляем все присваивания, выполненные на последнем разделении
-    while (assignments.top() != decisions.top().literal) {
-        values[abs(assignments.top()) - 1] = TermValue::Undefined;
-        assignments.pop();
-    }
+    do {
+        // удаляем все присваивания, выполненные на последнем разделении
+        while (assignments.top() != decisions.top().literal) {
+            values[abs(assignments.top()) - 1] = TermValue::Undefined;
+            assignments.pop();
+        }
 
-    Assignment &decision = decisions.top();
+        Assignment &decision = decisions.top();
 
-    if (decision.value == TermValue::True) { // сли это была истинная ветвь
-        decision.value = TermValue::False; // заменяем на ложную ветвь
-        values[abs(decision.literal) - 1] = TermValue::False;
-    }
-    else { // иначе попробовали оба варианта
+        if (decision.value == TermValue::True) { // сли это была истинная ветвь
+            decision.value = TermValue::False; // заменяем на ложную ветвь
+            values[abs(decision.literal) - 1] = TermValue::False;
+            return;
+        }
+
+        // иначе попробовали оба варианта
+        values[abs(decision.literal) - 1] = TermValue::Undefined; // сбрасываем переменную
         assignments.pop(); // извлекаем присваивание
         decisions.pop(); // извлекаем выбор
-        values[abs(decision.literal) - 1] = TermValue::Undefined; // сбрасываем переменную
-
-        if (decisions.size()) {
-            RollBack(assignments, decisions);
-        }
-    }
+    } while (decisions.size());
 }
 
 // разветвление
