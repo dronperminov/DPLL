@@ -42,17 +42,17 @@ string StrategyToString(DecisionStrategy strategy) {
 }
 
 void TestOneFile(const string& path, bool isSat, DecisionStrategy strategy) {
-    clock_t t0 = clock();
+    TimePoint t0 = Time::now();
     ifstream fin(path);
     ConjunctiveNormalForm cnf(fin);
     fin.close();
 
     assert(cnf.DPLL(strategy) == isSat);
 
-    clock_t t1 = clock();
-    double time = double(t1 - t0) / CLOCKS_PER_SEC;
+    TimePoint t1 = Time::now();
+    ms ellapsed = std::chrono::duration_cast<ms>(t1 - t0);
 
-    cout << "Time for test '" << path << "' (" + StrategyToString(strategy) + "): " << time << " sec" << endl;
+    cout << "Time for test '" << path << "' (" + StrategyToString(strategy) + "): " << ellapsed.count() << " sec" << endl;
 }
 
 double TestFromDir(Task task, DecisionStrategy strategy, int loops = 10) {
