@@ -26,6 +26,7 @@ enum class DecisionStrategy {
 
 struct Assignment {
     int literal;
+    bool isFirst;
     TermValue value;
 };
 
@@ -96,10 +97,10 @@ ConjunctiveNormalForm::ConjunctiveNormalForm(std::istream &fin) {
     if (clauses.size() != clausesCount)
         throw std::string("Invalid file: different clauses count");
 
-    values = std::vector<TermValue>(literalsCount, TermValue::Undefined); // значения литералов не определены
+    values = std::vector<TermValue>(literalsCount + 1, TermValue::Undefined); // значения литералов не определены
 
-    for (int i = 0; i < literalsCount; i++)
-        up[i + 1] = 0;
+    for (int i = 1; i <= literalsCount; i++)
+        up[i] = 0;
 }
 
 // обновление количества литералов
@@ -198,7 +199,7 @@ void ConjunctiveNormalForm::PrintTermValues() const {
 
 // получение значения литерала
 TermValue ConjunctiveNormalForm::GetLiteralValue(int literal) const {
-    size_t index = abs(literal) - 1;
+    size_t index = abs(literal);
 
     if (literal > 0 || values[index] == TermValue::Undefined)
         return values[index];
@@ -250,7 +251,7 @@ void ConjunctiveNormalForm::PropagateLiteral(size_t clause, std::stack<int> &ass
     TermValue value = literal > 0 ? TermValue::True : TermValue::False;
     up[abs(literal)]++;
 
-    values[abs(literal) - 1] = value;
+    values[abs(literal)] = value;
     assignments.push(literal);
 }
 
@@ -291,9 +292,9 @@ bool ConjunctiveNormalForm::IsConflict() const {
 
 // первый неопределённый литерал
 int ConjunctiveNormalForm::GetFirstUndefinedLiteral() const {
-    for (int i = 0; i < literalsCount; i++)
+    for (int i = 1; i <= literalsCount; i++)
         if (values[i] == TermValue::Undefined)
-            return i + 1;
+            return i;
 
     return 0; // нет неопределённых литералов
 }
@@ -302,9 +303,9 @@ int ConjunctiveNormalForm::GetFirstUndefinedLiteral() const {
 int ConjunctiveNormalForm::GetRandomUndefinedLiteral() const {
     std::vector<int> undefinedLiterals;
 
-    for (int i = 0; i < literalsCount; i++)
+    for (int i = 1; i <= literalsCount; i++)
         if (values[i] == TermValue::Undefined)
-            undefinedLiterals.push_back(i + 1);
+            undefinedLiterals.push_back(i);
 
     return undefinedLiterals[rand() % undefinedLiterals.size()];
 }
@@ -313,8 +314,8 @@ int ConjunctiveNormalForm::GetRandomUndefinedLiteral() const {
 int ConjunctiveNormalForm::GetMaxOccurencesLiteral() const {
     std::unordered_map<int, int> counts;
 
-    for (int i = 0; i < literalsCount; i++)
-        counts[i + 1] = 0;
+    for (int i = 1; i <= literalsCount; i++)
+        counts[i] = 0;
 
     for (size_t i = 0; i < clauses.size(); i++) {
         if (IsRemovedClause(i))
@@ -323,7 +324,7 @@ int ConjunctiveNormalForm::GetMaxOccurencesLiteral() const {
         for (auto j = clauses[i].begin(); j != clauses[i].end(); j++) {
             int literal = abs(*j);
 
-            if (values[literal - 1] == TermValue::Undefined)
+            if (values[literal] == TermValue::Undefined)
                 counts[literal]++;
         }
     }
@@ -347,8 +348,8 @@ int ConjunctiveNormalForm::GetMomsOccurencesLiteral() const {
 
     std::unordered_map<int, int> counts;
 
-    for (int i = 0; i < literalsCount; i++)
-        counts[i + 1] = 0;
+    for (int i = 1; i <= literalsCount; i++)
+        counts[i] = 0;
 
     for (size_t i = 0; i < clauses.size(); i++) {
         if (IsRemovedClause(i) || clauses[i].size() != minLength)
@@ -357,7 +358,7 @@ int ConjunctiveNormalForm::GetMomsOccurencesLiteral() const {
         for (auto j = clauses[i].begin(); j != clauses[i].end(); j++) {
             int literal = abs(*j);
 
-            if (values[literal - 1] == TermValue::Undefined)
+            if (values[literal] == TermValue::Undefined)
                 counts[literal]++;
         }
     }
@@ -375,8 +376,8 @@ int ConjunctiveNormalForm::GetMomsOccurencesLiteral() const {
 int ConjunctiveNormalForm::GetWeightedLiteral() const {
     std::unordered_map<int, double> weights;
 
-    for (int i = 0; i < literalsCount; i++)
-        weights[i + 1] = 0;
+    for (int i = 1; i <= literalsCount; i++)
+        weights[i] = 0;
 
     for (size_t i = 0; i < clauses.size(); i++) {
         if (IsRemovedClause(i))
@@ -387,7 +388,7 @@ int ConjunctiveNormalForm::GetWeightedLiteral() const {
         for (auto j = clauses[i].begin(); j != clauses[i].end(); j++) {
             int literal = abs(*j);
 
-            if (values[literal - 1] == TermValue::Undefined)
+            if (values[literal] == TermValue::Undefined)
                 weights[literal] += weight;
         }
     }
@@ -444,20 +445,20 @@ void ConjunctiveNormalForm::RollBack(std::stack<int> &assignments, std::stack<As
     do {
         // удаляем все присваивания, выполненные на последнем разделении
         while (assignments.top() != decisions.top().literal) {
-            values[abs(assignments.top()) - 1] = TermValue::Undefined;
+            values[abs(assignments.top())] = TermValue::Undefined;
             assignments.pop();
         }
 
         Assignment &decision = decisions.top();
 
-        if (decision.value == TermValue::True) { // сли это была истинная ветвь
-            decision.value = TermValue::False; // заменяем на ложную ветвь
-            values[abs(decision.literal) - 1] = TermValue::False;
+        if (decision.isFirst) { // сли это была первая ветвь
+            decision.isFirst = false;
+            values[abs(decision.literal)] = decision.value == TermValue::True ? TermValue::False : TermValue::True; // заменяем на противоположное;
             return;
         }
 
         // иначе попробовали оба варианта
-        values[abs(decision.literal) - 1] = TermValue::Undefined; // сбрасываем переменную
+        values[abs(decision.literal)] = TermValue::Undefined; // сбрасываем переменную
         assignments.pop(); // извлекаем присваивание
         decisions.pop(); // извлекаем выбор
     } while (decisions.size());
@@ -466,9 +467,11 @@ void ConjunctiveNormalForm::RollBack(std::stack<int> &assignments, std::stack<As
 // разветвление
 void ConjunctiveNormalForm::Decision(std::stack<int> &assignments, std::stack<Assignment> &decisions, DecisionStrategy strategy) {
     int literal = GetDecisionLiteral(strategy);
-    decisions.push({ literal, TermValue::True });
+    TermValue value = literal > 0 ? TermValue::True : TermValue::False;
+
+    decisions.push({ literal, true, value });
     assignments.push(literal);
-    values[literal - 1] = TermValue::True;
+    values[abs(literal)] = value;
 }
 
 // алгоритм DPLL
