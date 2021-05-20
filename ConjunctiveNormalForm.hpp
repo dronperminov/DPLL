@@ -42,6 +42,7 @@ class ConjunctiveNormalForm {
     void AddClause(const std::string& line); // добавление клаузы
 
     TermValue GetLiteralValue(int literal) const; // получение значения литерала
+    int GetClauseSize(size_t index) const; // получкение размера клаузы
     bool IsUnitClause(size_t index) const; // является ли клауза единичной
     bool IsRemovedClause(size_t index) const; // удалена ли клауза (есть ли единичные литералы)
     bool IsEmptyClause(size_t index) const; // пустая ли клауза
@@ -174,7 +175,7 @@ void ConjunctiveNormalForm::PrintTermValues() const {
     std::cout << "|    term    |   value   |" << std::endl;
     std::cout << "+------------+-----------+" << std::endl;
 
-    for (size_t i = 0; i < values.size(); i++) {
+    for (size_t i = 1; i <= values.size(); i++) {
         std::cout << "| " << std::setw(10) << ("x" + std::to_string(i + 1)) << " | " << std::setw(9);
 
         switch (values[i]) {
@@ -205,6 +206,17 @@ TermValue ConjunctiveNormalForm::GetLiteralValue(int literal) const {
         return values[index];
 
     return values[index] == TermValue::True ? TermValue::False : TermValue::True;
+}
+
+// получкение размера клаузы
+int ConjunctiveNormalForm::GetClauseSize(size_t index) const {
+    int size = 0;
+
+    for (auto it = clauses[index].begin(); it != clauses[index].end(); it++)
+        if (values[abs(*it)] == TermValue::Undefined)
+            size++;
+
+    return size;
 }
 
 // является ли клауза единичной
@@ -322,18 +334,19 @@ int ConjunctiveNormalForm::GetMaxOccurencesLiteral() const {
             continue;
 
         for (auto j = clauses[i].begin(); j != clauses[i].end(); j++) {
-            int literal = abs(*j);
-
-            if (values[literal] == TermValue::Undefined)
-                counts[literal]++;
+            counts[abs(*j)]++;
         }
     }
 
     int literal = 0;
 
-    for (auto it = counts.begin(); it != counts.end(); it++)
+    for (auto it = counts.begin(); it != counts.end(); it++) {
+        if (values[abs(it->first)] != TermValue::Undefined)
+            continue;
+
         if (literal == 0 || it->second > counts[literal])
             literal = it->first;
+    }
 
     return literal;
 }
@@ -342,9 +355,12 @@ int ConjunctiveNormalForm::GetMaxOccurencesLiteral() const {
 int ConjunctiveNormalForm::GetMomsOccurencesLiteral() const {
     int minLength = literalsCount;
 
-    for (size_t i = 0; i < clauses.size(); i++)
-        if (!IsRemovedClause(i) && clauses[i].size() < minLength)
-            minLength = clauses[i].size();
+    for (size_t i = 0; i < clauses.size(); i++) {
+        int size = GetClauseSize(i);
+
+        if (!IsRemovedClause(i) && size < minLength)
+            minLength = size;
+    }
 
     std::unordered_map<int, int> counts;
 
@@ -352,22 +368,23 @@ int ConjunctiveNormalForm::GetMomsOccurencesLiteral() const {
         counts[i] = 0;
 
     for (size_t i = 0; i < clauses.size(); i++) {
-        if (IsRemovedClause(i) || clauses[i].size() != minLength)
+        if (IsRemovedClause(i) || GetClauseSize(i) != minLength)
             continue;
 
         for (auto j = clauses[i].begin(); j != clauses[i].end(); j++) {
-            int literal = abs(*j);
-
-            if (values[literal] == TermValue::Undefined)
-                counts[literal]++;
+            counts[abs(*j)]++;
         }
     }
 
     int literal = 0;
 
-    for (auto it = counts.begin(); it != counts.end(); it++)
+    for (auto it = counts.begin(); it != counts.end(); it++) {
+        if (values[abs(it->first)] != TermValue::Undefined)
+            continue;
+
         if (literal == 0 || it->second > counts[literal])
             literal = it->first;
+    }
 
     return literal;
 }
@@ -383,21 +400,22 @@ int ConjunctiveNormalForm::GetWeightedLiteral() const {
         if (IsRemovedClause(i))
             continue;
 
-        double weight = 1.0 / (1 << clauses[i].size());
+        double weight = 1.0 / (1 << GetClauseSize(i));
 
         for (auto j = clauses[i].begin(); j != clauses[i].end(); j++) {
-            int literal = abs(*j);
-
-            if (values[literal] == TermValue::Undefined)
-                weights[literal] += weight;
+            weights[abs(*j)] += weight;
         }
     }
 
     int literal = 0;
 
-    for (auto it = weights.begin(); it != weights.end(); it++)
+    for (auto it = weights.begin(); it != weights.end(); it++) {
+        if (values[abs(it->first)] != TermValue::Undefined)
+            continue;
+
         if (literal == 0 || it->second > weights[literal])
             literal = it->first;
+    }
 
     return literal;
 }
