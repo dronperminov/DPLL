@@ -46,6 +46,7 @@ class ConjunctiveNormalForm {
     bool IsEmptyClause(size_t index) const; // пустая ли клауза
 
     int GetUnitLiteral(size_t index) const; // получение литерала из единичной клаузы
+    void PropagateLiteral(size_t clause, std::stack<int> &assignments); // распространение константы
     void UnitPropagation(std::stack<int> &assignments); // распространение констант
 
     bool IsSolve() const; // все ли клаузы удалены
@@ -56,8 +57,8 @@ class ConjunctiveNormalForm {
     int GetMaxOccurencesLiteral() const; // литерал с наибольшим числом вхождений
     int GetMomsOccurencesLiteral() const; // литерал с наибольшим числом вхождений в кратчайшие клаузы
     int GetWeightedLiteral() const; // литерал по взвешенной сумме
-    int GetUpLiteral(); // литерал по стратегии Up
-    int GetDecisionLiteral(DecisionStrategy strategy); // выбор литерала для разветвления
+    int GetUpLiteral() const; // литерал по стратегии Up
+    int GetDecisionLiteral(DecisionStrategy strategy) const; // выбор литерала для разветвления
 
     void RollBack(std::stack<int> &assignments, std::stack<Assignment> &decisions); // откат
     void Decision(std::stack<int> &assignments, std::stack<Assignment> &decisions, DecisionStrategy strategy); // разветвление
@@ -243,6 +244,16 @@ int ConjunctiveNormalForm::GetUnitLiteral(size_t index) const {
     throw std::string("GetUnitLiteral: clause is not unit");
 }
 
+// распространение константы
+void ConjunctiveNormalForm::PropagateLiteral(size_t clause, std::stack<int> &assignments) {
+    int literal = GetUnitLiteral(clause);
+    TermValue value = literal > 0 ? TermValue::True : TermValue::False;
+    up[abs(literal)]++;
+
+    values[abs(literal) - 1] = value;
+    assignments.push(literal);
+}
+
 // распространение констант
 void ConjunctiveNormalForm::UnitPropagation(std::stack<int> &assignments) {
     bool findUnitClause = true;
@@ -254,12 +265,7 @@ void ConjunctiveNormalForm::UnitPropagation(std::stack<int> &assignments) {
             if (IsRemovedClause(i) || !IsUnitClause(i))
                 continue;
 
-            int literal = GetUnitLiteral(i);
-            TermValue value = literal > 0 ? TermValue::True : TermValue::False;
-            up[abs(literal)]++;
-
-            values[abs(literal) - 1] = value;
-            assignments.push(literal);
+            PropagateLiteral(i, assignments);
             findUnitClause = true;
         }
     }
@@ -396,14 +402,14 @@ int ConjunctiveNormalForm::GetWeightedLiteral() const {
 }
 
 // литерал по стратегии Up
-int ConjunctiveNormalForm::GetUpLiteral() {
+int ConjunctiveNormalForm::GetUpLiteral() const {
     int literal = 0;
 
     for (auto it = up.begin(); it != up.end(); it++) {
         if (GetLiteralValue(it->first) != TermValue::Undefined)
             continue;
 
-        if (literal == 0 || it->second > up[literal])
+        if (literal == 0 || it->second > up.at(literal))
             literal = it->first;
     }
 
@@ -411,7 +417,7 @@ int ConjunctiveNormalForm::GetUpLiteral() {
 }
 
 // выбор литерала для разветвления
-int ConjunctiveNormalForm::GetDecisionLiteral(DecisionStrategy strategy) {
+int ConjunctiveNormalForm::GetDecisionLiteral(DecisionStrategy strategy) const {
     if (strategy == DecisionStrategy::First)
         return GetFirstUndefinedLiteral();
 
