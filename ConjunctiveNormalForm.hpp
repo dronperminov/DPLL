@@ -1,11 +1,14 @@
 #pragma once
 
 #include <iostream>
+#include <sstream>
 #include <iomanip>
 #include <vector>
 #include <stack>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <algorithm>
 
 // значения термов
 enum class TermValue {
@@ -39,7 +42,10 @@ class ConjunctiveNormalForm {
 
     void SetLiteralsCount(int literalsCount); // обновление количества литералов
     void SetClausesCount(int clausesCount); // обновление количества клауз
-    void AddClause(const std::string& line); // добавление клаузы
+    void AddClause(const std::string& line, bool removeDuplicates); // добавление клаузы
+
+    bool IsInclude(const std::vector<int> clause1, const std::vector<int> clause2) const; // проверка, что первое множество входит во второе
+    void Subsumption(); // удаление клауз, содержащих меньшие клаузы
 
     TermValue GetLiteralValue(int literal) const; // получение значения литерала
     int GetClauseSize(size_t index) const; // получкение размера клаузы
@@ -65,7 +71,7 @@ class ConjunctiveNormalForm {
     void RollBack(std::stack<int> &assignments, std::stack<Assignment> &decisions); // откат
     void Decision(std::stack<int> &assignments, std::stack<Assignment> &decisions, DecisionStrategy strategy); // разветвление
 public:
-    ConjunctiveNormalForm(std::istream &fin);
+    ConjunctiveNormalForm(std::istream &fin, bool removeDuplicates = false, bool subsumption = false);
 
     void Print() const; // вывод СКНФ
     void PrintTermValues() const; // вывод значений термов
@@ -73,7 +79,53 @@ public:
     bool DPLL(DecisionStrategy strategy); // алгоритм DPLL
 };
 
-ConjunctiveNormalForm::ConjunctiveNormalForm(std::istream &fin) {
+// перевод стратегии в строку
+std::string StrategyToString(DecisionStrategy strategy) {
+    if (strategy == DecisionStrategy::First)
+        return "first";
+
+    if (strategy == DecisionStrategy::Random)
+        return "random";
+
+    if (strategy == DecisionStrategy::Max)
+        return "max";
+
+    if (strategy == DecisionStrategy::Moms)
+        return "moms";
+
+    if (strategy == DecisionStrategy::Weighted)
+        return "weighted";
+
+    if (strategy == DecisionStrategy::Up)
+        return "up";
+
+    return "";
+}
+
+// получение стратегии
+DecisionStrategy GetStrategy(const std::string& strategy) {
+    if (strategy == "first")
+        return DecisionStrategy::First;
+
+    if (strategy == "random")
+        return DecisionStrategy::Random;
+
+    if (strategy == "max")
+        return DecisionStrategy::Max;
+
+    if (strategy == "moms")
+        return DecisionStrategy::Moms;
+
+    if (strategy == "weighted")
+        return DecisionStrategy::Weighted;
+
+    if (strategy == "up")
+        return DecisionStrategy::Up;
+
+    throw std::string("Invalid strategy name '") + strategy + "'";
+}
+
+ConjunctiveNormalForm::ConjunctiveNormalForm(std::istream &fin, bool removeDuplicates, bool subsumption) {
     this->literalsCount = 0;
     this->clausesCount = 0;
 
@@ -92,7 +144,7 @@ ConjunctiveNormalForm::ConjunctiveNormalForm(std::istream &fin) {
             continue;
         }
 
-        AddClause(line);
+        AddClause(line, removeDuplicates);
     }
 
     if (clauses.size() != clausesCount)
@@ -102,6 +154,10 @@ ConjunctiveNormalForm::ConjunctiveNormalForm(std::istream &fin) {
 
     for (int i = 1; i <= literalsCount; i++)
         up[i] = 0;
+
+    if (subsumption) {
+        Subsumption();
+    }
 }
 
 // обновление количества литералов
@@ -122,7 +178,7 @@ void ConjunctiveNormalForm::SetClausesCount(int clausesCount) {
 }
 
 // добавление клаузы
-void ConjunctiveNormalForm::AddClause(const std::string& line) {
+void ConjunctiveNormalForm::AddClause(const std::string& line, bool removeDuplicates) {
     std::stringstream ss(line);
     std::vector<int> clause;
     int literal;
@@ -131,10 +187,59 @@ void ConjunctiveNormalForm::AddClause(const std::string& line) {
         if (literal == 0 || abs(literal) > literalsCount)
             throw std::string("Invalid literal index at line '") + line + "'";
 
-        clause.push_back(literal); // считываем клаузы
+        clause.push_back(literal); // добавляем литералы в клаузу
     }
 
-    clauses.push_back(clause); // добавляем клаузы
+    if (removeDuplicates) {
+        std::sort(clause.begin(), clause.end());
+
+        if (std::find(clauses.begin(), clauses.end(), clause) == clauses.end()) {
+            clauses.push_back(clause); // добавляем клаузу
+        }
+        else {
+            clausesCount--;
+        }
+    }
+    else {
+        clauses.push_back(clause); // добавляем клаузу
+    }
+}
+
+// проверка, что первое множество входит во второе
+bool ConjunctiveNormalForm::IsInclude(const std::vector<int> clause1, const std::vector<int> clause2) const {
+    if (clause1.size() > clause2.size())
+        return false;
+
+    for (auto it1 = clause1.begin(); it1 != clause1.end(); it1++)
+        if (!std::binary_search(clause2.begin(), clause2.end(), *it1))
+            return false;
+
+    return true;
+}
+
+// удаление клауз, содержащих меньшие клаузы
+void ConjunctiveNormalForm::Subsumption() {
+    std::unordered_set<size_t> stays;
+
+    for (size_t i = 0; i < clauses.size(); i++)
+        stays.insert(i);
+
+    for (size_t i = 0; i < clauses.size(); i++)
+        for (size_t j = 0; j < clauses.size(); j++)
+            if (i != j && IsInclude(clauses[i], clauses[j]))
+                stays.erase(j);
+
+    if (stays.size() == clauses.size())
+        return;
+
+    size_t index = 0;
+
+    for (size_t i = 0; i < clauses.size(); i++)
+        if (stays.find(i) != stays.end())
+            clauses[index++] = clauses[i];
+
+    std::cout << clauses.size() << " => " << index << std::endl;
+    clauses.resize(index);
 }
 
 // вывод СКНФ
