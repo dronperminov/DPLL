@@ -4,15 +4,16 @@
 * Only unit propagation
 * No recursive, uses decisions stack
 * Different decision heuristics
+* Preprocessing (remove duplicate clauses and subsumption)
 
 ## Build
 * For building dpll application run `make dpll`
 * For building perofrmance test run `make test` and than `./test`
 
 ## Usage:
-`./dpll [path/to/cnf/file] [strategy]`
+`./dpll path/to/cnf/file [strategy] [-d] [-s]`
 
-## Decision strategies:
+### Decision strategies:
 * `first` - get first undefined literal (selected by defalt)
 * `random` - get random undefined literal
 * `max` - get literal with max occurencies in clauses
@@ -20,6 +21,9 @@
 * `weighted` - get literal with max weighted sum (score of l = 2^-|clause with l|)
 * `up` - get literal with max up value (up in unit propagation)
 
+### Flags:
+* `-d` - remove duplicate clauses during reading (increase time, false for default)
+* `-s` - use subsumption after read (increase time even more, false for default)
 
 ## Performance of DPLL SAT solver (time in ms)
 |  cnf \ strategy |     max |    moms |weighted |      up |   first |  random |
