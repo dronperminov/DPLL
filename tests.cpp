@@ -19,28 +19,6 @@ struct Task {
     bool isSat;
 };
 
-string StrategyToString(DecisionStrategy strategy) {
-    if (strategy == DecisionStrategy::First)
-        return "first";
-
-    if (strategy == DecisionStrategy::Random)
-        return "random";
-
-    if (strategy == DecisionStrategy::Max)
-        return "max";
-
-    if (strategy == DecisionStrategy::Moms)
-        return "moms";
-
-    if (strategy == DecisionStrategy::Weighted)
-        return "weighted";
-
-    if (strategy == DecisionStrategy::Up)
-        return "up";
-
-    return "";
-}
-
 void TestOneFile(const string& path, bool isSat, DecisionStrategy strategy) {
     TimePoint t0 = Time::now();
     ifstream fin(path);
@@ -52,7 +30,7 @@ void TestOneFile(const string& path, bool isSat, DecisionStrategy strategy) {
     TimePoint t1 = Time::now();
     ms ellapsed = std::chrono::duration_cast<ms>(t1 - t0);
 
-    cout << "Time for test '" << path << "' (" + StrategyToString(strategy) + "): " << ellapsed.count() << " sec" << endl;
+    cout << "Time for test '" << path << "' (" + StrategyToString(strategy) + "): " << ellapsed.count() << " ms" << endl;
 }
 
 double TestFromDir(Task task, DecisionStrategy strategy, int loops = 10) {
