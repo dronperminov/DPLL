@@ -39,10 +39,12 @@ class ConjunctiveNormalForm {
     std::vector<std::vector<int>> clauses; // клаузы
     std::vector<TermValue> values; // значения термов
     std::unordered_map<int, int> up;
+    std::unordered_map<int, std::vector<int>> l2c;
 
     void SetLiteralsCount(int literalsCount); // обновление количества литералов
     void SetClausesCount(int clausesCount); // обновление количества клауз
     void AddClause(const std::string& line, bool removeDuplicates); // добавление клаузы
+    void FillWatchLists(); // заполнение вотчлистов
 
     bool IsInclude(const std::vector<int> clause1, const std::vector<int> clause2) const; // проверка, что первое множество входит во второе
     void Subsumption(); // удаление клауз, содержащих меньшие клаузы
@@ -55,10 +57,9 @@ class ConjunctiveNormalForm {
 
     int GetUnitLiteral(size_t index) const; // получение литерала из единичной клаузы
     void PropagateLiteral(size_t clause, std::stack<int> &assignments); // распространение константы
-    void UnitPropagation(std::stack<int> &assignments); // распространение констант
+    bool UnitPropagation(std::stack<int> &assignments); // распространение констант
 
-    bool IsSolve() const; // все ли клаузы удалены
-    bool IsConflict() const; // есть ли пустые клаузы
+    bool IsConflict(int literal) const; // есть ли пустые клаузы
 
     int GetFirstUndefinedLiteral() const; // первый неопределённый литерал
     int GetRandomUndefinedLiteral() const; // случайный неопределённый литерал
@@ -68,7 +69,7 @@ class ConjunctiveNormalForm {
     int GetUpLiteral() const; // литерал по стратегии Up
     int GetDecisionLiteral(DecisionStrategy strategy) const; // выбор литерала для разветвления
 
-    void RollBack(std::stack<int> &assignments, std::stack<Assignment> &decisions); // откат
+    bool RollBack(std::stack<int> &assignments, std::stack<Assignment> &decisions); // откат
     void Decision(std::stack<int> &assignments, std::stack<Assignment> &decisions, DecisionStrategy strategy); // разветвление
 public:
     ConjunctiveNormalForm(std::istream &fin, bool removeDuplicates = false, bool subsumption = false);
@@ -152,12 +153,14 @@ ConjunctiveNormalForm::ConjunctiveNormalForm(std::istream &fin, bool removeDupli
 
     values = std::vector<TermValue>(literalsCount + 1, TermValue::Undefined); // значения литералов не определены
 
-    for (int i = 1; i <= literalsCount; i++)
-        up[i] = 0;
-
     if (subsumption) {
         Subsumption();
     }
+
+    for (int i = 1; i <= literalsCount; i++)
+        up[i] = 0;
+
+    FillWatchLists();
 }
 
 // обновление количества литералов
@@ -205,6 +208,18 @@ void ConjunctiveNormalForm::AddClause(const std::string& line, bool removeDuplic
     }
 }
 
+// заполнение вотчлистов
+void ConjunctiveNormalForm::FillWatchLists() {
+    for (int i = 1; i <= literalsCount; i++) {
+        l2c[i] = std::vector<int>();
+        l2c[-i] = std::vector<int>();
+    }
+
+    for (size_t i = 0; i < clauses.size(); i++)
+        for (auto j = clauses[i].begin(); j != clauses[i].end(); j++)
+            l2c[*j].push_back(i);
+}
+
 // проверка, что первое множество входит во второе
 bool ConjunctiveNormalForm::IsInclude(const std::vector<int> clause1, const std::vector<int> clause2) const {
     if (clause1.size() > clause2.size())
@@ -238,7 +253,6 @@ void ConjunctiveNormalForm::Subsumption() {
         if (stays.find(i) != stays.end())
             clauses[index++] = clauses[i];
 
-    std::cout << clauses.size() << " => " << index << std::endl;
     clauses.resize(index);
 }
 
@@ -373,35 +387,21 @@ void ConjunctiveNormalForm::PropagateLiteral(size_t clause, std::stack<int> &ass
 }
 
 // распространение констант
-void ConjunctiveNormalForm::UnitPropagation(std::stack<int> &assignments) {
-    bool findUnitClause = true;
-
-    while (findUnitClause) {
-        findUnitClause = false;
-
-        for (size_t i = 0; i < clauses.size(); i++) {
-            if (IsRemovedClause(i) || !IsUnitClause(i))
-                continue;
-
+bool ConjunctiveNormalForm::UnitPropagation(std::stack<int> &assignments) {
+    for (size_t i = 0; i < clauses.size(); i++) {
+        if (!IsRemovedClause(i) && IsUnitClause(i)) {
             PropagateLiteral(i, assignments);
-            findUnitClause = true;
+            return true;
         }
     }
-}
 
-// все ли клаузы удалены
-bool ConjunctiveNormalForm::IsSolve() const {
-    for (size_t i = 0; i < clauses.size(); i++)
-        if (!IsRemovedClause(i))
-            return false;
-
-    return true; // все клаузы удалены, решение
+    return false;
 }
 
 // есть ли пустые клаузы
-bool ConjunctiveNormalForm::IsConflict() const {
-    for (size_t i = 0; i < clauses.size(); i++)
-        if (IsEmptyClause(i))
+bool ConjunctiveNormalForm::IsConflict(int literal) const {
+    for (auto i = l2c.at(literal).begin(); i != l2c.at(literal).end(); i++)
+        if (IsEmptyClause(*i))
             return true; // конфликт
 
     return false; // пустых клауз нет
@@ -564,8 +564,8 @@ int ConjunctiveNormalForm::GetDecisionLiteral(DecisionStrategy strategy) const {
 }
 
 // откат
-void ConjunctiveNormalForm::RollBack(std::stack<int> &assignments, std::stack<Assignment> &decisions) {
-    do {
+bool ConjunctiveNormalForm::RollBack(std::stack<int> &assignments, std::stack<Assignment> &decisions) {
+    while (decisions.size()) {
         // удаляем все присваивания, выполненные на последнем разделении
         while (assignments.top() != decisions.top().literal) {
             values[abs(assignments.top())] = TermValue::Undefined;
@@ -577,14 +577,16 @@ void ConjunctiveNormalForm::RollBack(std::stack<int> &assignments, std::stack<As
         if (decision.isFirst) { // сли это была первая ветвь
             decision.isFirst = false;
             values[abs(decision.literal)] = decision.value == TermValue::True ? TermValue::False : TermValue::True; // заменяем на противоположное;
-            return;
+            return true;
         }
 
         // иначе попробовали оба варианта
         values[abs(decision.literal)] = TermValue::Undefined; // сбрасываем переменную
         assignments.pop(); // извлекаем присваивание
         decisions.pop(); // извлекаем выбор
-    } while (decisions.size());
+    }
+
+    return false; // откатываться некуда
 }
 
 // разветвление
@@ -603,20 +605,15 @@ bool ConjunctiveNormalForm::DPLL(DecisionStrategy strategy) {
     std::stack<Assignment> decisions;
 
     while (true) {
-        UnitPropagation(assignments); // распространяем единичные литералы
+        if (!UnitPropagation(assignments)) // распространяем единичные литералы
+            Decision(assignments, decisions, strategy); // разветвляемся
 
-        if (IsConflict()) { // если конфликт
-            RollBack(assignments, decisions); // откатываемся
-
-            if (decisions.size() == 0) // если выбора больше нет
-                return false; // то невыполнима
-
-            continue; // пытаемся посмотреть дальше
+        if (IsConflict(-assignments.top())) { // если конфликт
+            if (!RollBack(assignments, decisions)) // если откатываться стало некуда
+                return false; // невыполнима
         }
-
-        if (IsSolve()) // если решение
+        else if (assignments.size() == literalsCount) { // если решение
             return true; // то выполнима
-
-        Decision(assignments, decisions, strategy); // разветвляемся
+        }
     }
 }
