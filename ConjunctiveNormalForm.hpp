@@ -24,7 +24,8 @@ enum class DecisionStrategy {
     Max, // максимальное число вхождений в клаузы
     Moms, // вхождения в минимальные клаузы
     Weighted, // взвешенная сумму
-    Up // стратегия UP
+    Up, // стратегия UP
+    AUPC
 };
 
 struct Assignment {
@@ -67,6 +68,7 @@ class ConjunctiveNormalForm {
     int GetMomsOccurencesLiteral() const; // литерал с наибольшим числом вхождений в кратчайшие клаузы
     int GetWeightedLiteral() const; // литерал по взвешенной сумме
     int GetUpLiteral() const; // литерал по стратегии Up
+    int GetAUPCLiteral() const; // литерал по стратегии AUPC
     int GetDecisionLiteral(DecisionStrategy strategy) const; // выбор литерала для разветвления
 
     bool RollBack(std::stack<int> &assignments, std::stack<Assignment> &decisions); // откат
@@ -100,6 +102,9 @@ std::string StrategyToString(DecisionStrategy strategy) {
     if (strategy == DecisionStrategy::Up)
         return "up";
 
+    if (strategy == DecisionStrategy::AUPC)
+        return "aupc";
+
     return "";
 }
 
@@ -122,6 +127,9 @@ DecisionStrategy GetStrategy(const std::string& strategy) {
 
     if (strategy == "up")
         return DecisionStrategy::Up;
+
+    if (strategy == "aupc")
+        return DecisionStrategy::AUPC;
 
     throw std::string("Invalid strategy name '") + strategy + "'";
 }
@@ -540,6 +548,35 @@ int ConjunctiveNormalForm::GetUpLiteral() const {
     return literal;
 }
 
+// литерал по стратегии AUPC
+int ConjunctiveNormalForm::GetAUPCLiteral() const {
+    std::unordered_map<int, int> counts;
+
+    for (int i = 1; i <= literalsCount; i++)
+        counts[i] = 0;
+
+    for (size_t i = 0; i < clauses.size(); i++) {
+        if (IsRemovedClause(i) || GetClauseSize(i) != 2)
+            continue;
+
+        for (auto j = clauses[i].begin(); j != clauses[i].end(); j++) {
+            counts[abs(*j)]++;
+        }
+    }
+
+    int literal = 0;
+
+    for (auto it = counts.begin(); it != counts.end(); it++) {
+        if (values[abs(it->first)] != TermValue::Undefined)
+            continue;
+
+        if (literal == 0 || it->second > counts[literal])
+            literal = it->first;
+    }
+
+    return literal;
+}
+
 // выбор литерала для разветвления
 int ConjunctiveNormalForm::GetDecisionLiteral(DecisionStrategy strategy) const {
     if (strategy == DecisionStrategy::First)
@@ -559,6 +596,9 @@ int ConjunctiveNormalForm::GetDecisionLiteral(DecisionStrategy strategy) const {
 
     if (strategy == DecisionStrategy::Up)
         return GetUpLiteral();
+
+    if (strategy == DecisionStrategy::AUPC)
+        return GetAUPCLiteral();
 
     return GetFirstUndefinedLiteral();
 }

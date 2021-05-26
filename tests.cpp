@@ -76,6 +76,7 @@ int main(int argc, char **argv) {
         DecisionStrategy::Max,
         DecisionStrategy::Moms,
         DecisionStrategy::Weighted,
+        DecisionStrategy::AUPC,
         DecisionStrategy::Up,
         DecisionStrategy::First,
         DecisionStrategy::Random
