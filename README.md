@@ -21,26 +21,27 @@
 * `moms` - get literal with max occurencies in clauses with minimal size
 * `weighted` - get literal with max weighted sum (score of l = 2^-|clause with l|)
 * `up` - get literal with max up value (up in unit propagation)
+* `aupc` - get literal with max occurencies of clauses by size = 2
 
 ### Flags:
 * `-d` - remove duplicate clauses during reading (increase time, false for default)
 * `-s` - use subsumption after read (increase time even more, false for default)
 
 ## Performance of DPLL SAT solver (time in ms)
-| cnf \ strategy |     max |    moms |weighted |      up |   first |  random |
-|       :-:      |     :-: |     :-: |     :-: |     :-: |     :-: |     :-: |
-|          sat20 |    0.13 |   0.132 |   0.126 | **0.117** |    0.12 |   0.123 |
-|          sat50 |   0.905 |   0.691 | **0.683** |    1.14 |    2.04 |    2.68 |
-|       unsat50  |    1.51 | **1.04** |    1.06 |    1.97 |    5.77 |    6.42 |
-|          sat75 |     4.5 | **2.65** |    2.77 |    6.72 |    45.2 |    43.3 |
-|        unsat75 |    9.65 | **4.95** |    5.15 |    12.8 |    95.2 |     112 |
-|         sat100 |    22.7 | **8.54** |    9.62 |    29.2 |     567 |     614 |
-|       unsat100 |      56 | **20.5** |    23.4 |    76.5 |    1661 |    1922 |
-|   pigeon-hole6 |     5.6 |    12.6 | **5.4** |     6.9 |     8.2 |     7.6 |
-|   pigeon-hole7 |    46.9 |     166 | **44.9** |    75.9 |     107 |    95.2 |
-|   pigeon-hole8 |     476 |    2717 | **457** |    1101 |    1713 |    1383 |
-|   pigeon-hole9 |    6251 |   36603 | **6083** |   16130 |   29432 |   22703 |
-|         hanoi4 | **35512** | 2091134 | 2001715 | 3421203 |   76612 |      ? |
+| cnf \ strategy |       max |     moms |  weighted |      aupc |        up |   first |  random |
+|       :-:      |       :-: |      :-: |       :-: |       :-: |       :-: |     :-: |     :-: |
+|          sat20 |      0.13 |    0.132 |     0.126 |     0.125 | **0.117** |    0.12 |   0.123 |
+|          sat50 |     0.905 |    0.691 |     0.683 | **0.659** |      1.14 |    2.04 |    2.68 |
+|        unsat50 |      1.51 | **1.04** |      1.06 |      1.12 |      1.97 |    5.77 |    6.42 |
+|          sat75 |       4.5 |     2.65 |      2.77 |  **2.43** |      6.72 |    45.2 |    43.3 |
+|        unsat75 |      9.65 | **4.95** |      5.15 |      5.22 |      12.8 |    95.2 |     112 |
+|         sat100 |      22.7 | **8.54** |      9.62 |      8.94 |      29.2 |     567 |     614 |
+|       unsat100 |        56 | **20.5** |      23.4 |      24.6 |      76.5 |    1661 |    1922 |
+|   pigeon-hole6 |         5 |     12.2 |   **4.8** |      10.8 |       6.2 |     8.2 |     7.6 |
+|   pigeon-hole7 |      45.8 |      165 |  **44.4** |       143 |      72.2 |     107 |    95.2 |
+|   pigeon-hole8 |       466 |     2717 |   **454** |      2352 |      1053 |    1713 |    1383 |
+|   pigeon-hole9 |      6081 |    36503 |  **5981** |     31412 |     15730 |   29432 |   22703 |
+|         hanoi4 | **35235** |  2091134 |   2001715 |   2243821 |   3421203 |   76612 |       ? |
 
 
 ## Input file format
